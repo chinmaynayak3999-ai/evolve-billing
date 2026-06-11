@@ -44,7 +44,10 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      # 8. Replace default Capacitor icons with the Evolve logo
+      # 8. Install ImageMagick then set Evolve logo as app icon
+      - name: Install ImageMagick
+        run: sudo apt-get install -y imagemagick
+
       - name: Set app icons
         run: |
           for dpi in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
@@ -58,7 +61,7 @@ jobs:
             DIR="android/app/src/main/res/mipmap-${dpi}"
             mkdir -p "$DIR"
             convert public/pwa-512.png -resize ${size}x${size} "$DIR/ic_launcher.png"
-            convert public/pwa-512.png -resize ${size}x${size} -vignette 0x0 "$DIR/ic_launcher_round.png"
+            cp "$DIR/ic_launcher.png" "$DIR/ic_launcher_round.png"
           done
 
       # 9. Build the debug APK
