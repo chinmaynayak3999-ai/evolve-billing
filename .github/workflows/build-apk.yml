@@ -1,0 +1,97 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:      # lets you trigger manually from GitHub website
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Get the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 3. Set up Java (needed for Android build)
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 4. Install npm packages
+      - name: Install dependencies
+        run: npm install
+
+      # 5. Build the web app
+      - name: Build web app
+        run: npm run build
+
+      # 6. Generate Android project from Capacitor
+      - name: Add Android platform
+        run: npx cap add android
+
+      # 7. Copy web assets into the Android project
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      # 8. Replace default Capacitor icons with the Evolve logo
+      - name: Set app icons
+        run: |
+          for dpi in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            case $dpi in
+              mdpi)    size=48  ;;
+              hdpi)    size=72  ;;
+              xhdpi)   size=96  ;;
+              xxhdpi)  size=144 ;;
+              xxxhdpi) size=192 ;;
+            esac
+            DIR="android/app/src/main/res/mipmap-${dpi}"
+            mkdir -p "$DIR"
+            convert public/pwa-512.png -resize ${size}x${size} "$DIR/ic_launcher.png"
+            convert public/pwa-512.png -resize ${size}x${size} -vignette 0x0 "$DIR/ic_launcher_round.png"
+          done
+
+      # 9. Build the debug APK
+      - name: Build debug APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      # 10. Upload APK — downloadable from the Actions tab on GitHub
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Evolve-Billing-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 90
+
+      # 11. Also create a GitHub Release with the APK attached
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Evolve Billing v${{ github.run_number }}"
+          body: |
+            ## Evolve Billing Android App
+
+            **Download the APK below and install on your Android phone.**
+
+            Steps to install:
+            1. Download `app-debug.apk`
+            2. Open it on your phone
+            3. If asked "Allow install from unknown sources" → tap Allow
+            4. Install → Open → Sign in with Google
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          draft: false
+          prerelease: false
