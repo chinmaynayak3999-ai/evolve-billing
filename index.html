@@ -91,6 +91,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .act-edit{background:#e8ecff;color:var(--pr)}
 .act-del{background:#fde8e8;color:var(--red)}
 .act-paid{background:#d4edda;color:#155724}
+.act-wa{background:#25D366;color:#fff}
 /* receipt pending bill selector */
 .rcpt-bill{background:#fff;border:2px solid var(--bdr);border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer}
 .rcpt-bill.sel{border-color:var(--cash);background:#f0faf4}
@@ -448,6 +449,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
   </div>
 </div>
 
+<!-- Share Modal -->
+<div class="ov hide" id="share-mod">
+  <div class="modal">
+    <div class="dbar"></div>
+    <div class="mhdr"><span>&#127881; Saved! Share with client?</span><button class="mx" onclick="document.getElementById('share-mod').classList.add('hide')">&#10005;</button></div>
+    <div id="share-cust-info" style="background:#f0faf4;border-radius:12px;padding:14px;margin-bottom:16px;font-size:14px"></div>
+    <button id="share-wa-btn" class="btn btn-wa btn-full" style="font-size:16px;padding:16px">&#128242; Send on WhatsApp</button>
+    <button class="btn btn-grey btn-full" style="margin-top:10px" onclick="document.getElementById('share-mod').classList.add('hide')">Skip</button>
+  </div>
+</div>
+
 <!-- Confirm Modal -->
 <div class="ov hide" id="conf-mod">
   <div class="modal">
@@ -506,8 +518,9 @@ function makeBillRow(inv,c,showActions,fromC){
   if(showActions){
     h+='<div class="act-row">';
     if(st!=='paid')h+='<button class="act-btn act-paid" data-id="'+inv.id+'" onclick="rowQP(this)">&#128181; Pay</button>';
+    h+='<button class="act-btn act-wa" data-id="'+inv.id+'" onclick="shareInvWA(this.dataset.id)">&#128242; WA</button>';
     h+='<button class="act-btn act-edit" data-id="'+inv.id+'" onclick="rowEdit(this)">&#9999; Edit</button>';
-    h+='<button class="act-btn act-del" data-id="'+inv.id+'" onclick="rowDel(this)">&#128465; Delete</button>';
+    h+='<button class="act-btn act-del" data-id="'+inv.id+'" onclick="rowDel(this)">&#128465;</button>';
     h+='</div>';
   }
   h+='</div>';return h;
@@ -521,7 +534,8 @@ function makeRcptRow(rcpt,c,showActions){
   h+='<div class="inv-right"><div class="inv-amt" style="color:var(--cash)">'+Rs(rcpt.amt)+'</div><span class="badge b-rcpt">Receipt</span></div></div>';
   if(showActions){
     h+='<div class="act-row">';
-    h+='<button class="act-btn act-del" data-id="'+rcpt.id+'" onclick="rowDelRcpt(this)">&#128465; Delete</button>';
+    h+='<button class="act-btn act-wa" data-id="'+rcpt.id+'" onclick="shareRcptWA(this.dataset.id)">&#128242; WA</button>';
+    h+='<button class="act-btn act-del" data-id="'+rcpt.id+'" onclick="rowDelRcpt(this)">&#128465;</button>';
     h+='</div>';
   }
   h+='</div>';return h;
@@ -680,7 +694,10 @@ function saveInv(){
   if(!d.inv)d.inv=[];
   if(eid){var idx=d.inv.findIndex(function(x){return x.id===eid;});if(idx>=0)d.inv[idx]={id:eid,no:d.inv[idx].no,cid:cid,rows:rows,pt:invPay,paid:paid,dt:dt,nt:nt,ca:d.inv[idx].ca};}
   else{var no=nextNo(d);d.s.counter=(d.s.counter||1)+1;d.inv.push({id:uid(),no:no,cid:cid,rows:rows,pt:invPay,paid:paid,dt:dt,nt:nt,ca:new Date().toISOString()});}
-  sav(d);toast(eid?'Sale updated!':'Sale saved!');goTo('bills');
+  sav(d);
+  var savedId=eid||(d.inv[d.inv.length-1]&&d.inv[d.inv.length-1].id);
+  if(!eid)savedId=d.inv[d.inv.length-1].id;
+  goTo('bills');showShareModal(savedId,'inv');
 }
 
 /* ---- RECEIPT ---- */
@@ -754,7 +771,8 @@ function saveRcpt(){
     remaining-=toApply;
   });
   d.rcpt.push({id:uid(),no:no,cid:cid,amt:amt,mode:rcptPay,bills:rcptSelBillIds.slice(),dt:dt,nt:nt,ca:new Date().toISOString()});
-  sav(d);toast('Receipt saved!');rcptSelBillIds=[];goTo('bills');
+  var savedRcpt=d.rcpt[d.rcpt.length-1];
+  sav(d);rcptSelBillIds=[];goTo('bills');showShareModal(savedRcpt.id,'rcpt');
 }
 
 /* ---- INVOICE DETAIL ---- */
@@ -852,6 +870,18 @@ function delRcptById(id){
   });
 }
 
+function showShareModal(id,type){
+  var d=db(),item=type==='inv'?(d.inv||[]).find(function(x){return x.id===id;}):(d.rcpt||[]).find(function(x){return x.id===id;});
+  if(!item)return;
+  var c=d.c.find(function(x){return x.id===item.cid;}),name=c?c.n:'?',phone=c?c.p:'';
+  var infoEl=document.getElementById('share-cust-info');
+  infoEl.innerHTML='<b>'+esc(name)+'</b>'+(phone?'<br>&#128222; '+esc(phone):'<br><span style="color:var(--red)">No phone saved for this party</span>');
+  var btn=document.getElementById('share-wa-btn');
+  btn.onclick=function(){document.getElementById('share-mod').classList.add('hide');if(type==='inv'){selInvId=id;sendInvWA();}else{selRcptId=id;sendRcptWA();}};
+  document.getElementById('share-mod').classList.remove('hide');
+}
+function shareInvWA(id){event.stopPropagation();selInvId=id;sendInvWA();}
+function shareRcptWA(id){event.stopPropagation();selRcptId=id;sendRcptWA();}
 function sendInvWA(){
   var d=db(),inv=(d.inv||[]).find(function(x){return x.id===selInvId;});if(!inv){toast('Not found');return;}
   var c=d.c.find(function(x){return x.id===inv.cid;});if(!c||!c.p){toast('No phone for this party!');return;}
